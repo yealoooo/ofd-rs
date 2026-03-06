@@ -1,0 +1,14 @@
+[package]
+name = "ofd-rs"
+version = "0.1.0"
+edition = "2021"
+description = "OFD (Open Fixed-layout Document, GB/T 33190-2016) library for Rust"
+license = "Apache-2.0"
+repository = "https://github.com/yealou/ofd-rs"
+readme = "README.md"
+keywords = ["ofd", "document", "pdf-alternative", "fixed-layout"]
+categories = ["encoding", "parser-implementations"]
+
+[dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
+uuid = { version = "1", features = ["v4"] }
