@@ -1,11 +1,9 @@
-pub(crate) mod ofd;
-pub(crate) mod document;
+pub mod ofd;
+pub mod document;
 pub(crate) mod page;
 pub(crate) mod resource;
 pub(crate) mod graphic;
 
-pub use ofd::*;
-pub use document::*;
-pub use page::*;
-pub use resource::*;
-pub use graphic::*;
+pub use document::{PageSize, PPM_DEFAULT};
+pub use ofd::DocInfo;
+pub use resource::ImageFormat;

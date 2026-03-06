@@ -2,6 +2,11 @@
 
 use crate::types::StBox;
 
+/// Default pixels-per-millimeter ratio, matching ofdrw convention.
+/// ofdrw uses `pixels / 5` to convert pixel dimensions to mm.
+/// 5 px/mm ≈ 127 DPI.
+pub const PPM_DEFAULT: f64 = 5.0;
+
 /// Page size in millimeters.
 #[derive(Debug, Clone, Copy)]
 pub struct PageSize {
@@ -19,6 +24,16 @@ impl PageSize {
         Self {
             width_mm: width_px as f64 * 25.4 / dpi,
             height_mm: height_px as f64 * 25.4 / dpi,
+        }
+    }
+
+    /// Calculate page size from pixel dimensions using pixels-per-mm ratio.
+    /// This matches ofdrw's conversion: `mm = pixels / ppm`.
+    /// Use [`PPM_DEFAULT`] (5.0) for ofdrw-compatible behavior.
+    pub fn from_pixels_ppm(width_px: u32, height_px: u32, ppm: f64) -> Self {
+        Self {
+            width_mm: width_px as f64 / ppm,
+            height_mm: height_px as f64 / ppm,
         }
     }
 

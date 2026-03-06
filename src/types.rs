@@ -24,7 +24,19 @@ impl StBox {
 
 impl fmt::Display for StBox {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.4} {:.4} {:.4} {:.4}", self.x, self.y, self.w, self.h)
+        write!(f, "{} {} {} {}", format_mm(self.x), format_mm(self.y), format_mm(self.w), format_mm(self.h))
+    }
+}
+
+/// Format a mm value: drop trailing zeros, integers show as "210" not "210.0000".
+/// Matches ofdrw behavior: `0 0 210 297` for round numbers, `227.1889` for fractional.
+fn format_mm(v: f64) -> String {
+    if v.fract() == 0.0 {
+        format!("{}", v as i64)
+    } else {
+        // Up to 4 decimal places, trim trailing zeros
+        let s = format!("{:.4}", v);
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
     }
 }
 
@@ -37,8 +49,13 @@ pub struct StPos {
 
 impl fmt::Display for StPos {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.4} {:.4}", self.x, self.y)
+        write!(f, "{} {}", format_mm(self.x), format_mm(self.y))
     }
+}
+
+/// Format mm value for use outside types.rs (e.g., CTM attributes).
+pub fn format_mm_value(v: f64) -> String {
+    format_mm(v)
 }
 
 /// ST_ID: Unsigned integer identifier, unique within a document.

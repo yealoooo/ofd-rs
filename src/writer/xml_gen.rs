@@ -1,39 +1,63 @@
 //! XML generation for OFD document files.
 //!
 //! Each function produces the XML content for one file in the OFD package.
-//! We use direct `write!` formatting instead of an XML framework because the
-//! OFD XML structure is fixed and well-defined.
+//! Structure follows ofdrw (https://github.com/ofdrw/ofdrw) conventions.
 
-use crate::model::{DocInfo, PageDef};
+use crate::model::document::PageDef;
 use crate::model::graphic::{GraphicObject, ImageObject};
-use crate::model::resource::{FontDef, MediaDef};
-use crate::types::{StBox, OFD_NAMESPACE};
+use crate::model::ofd::DocInfo;
+use crate::model::resource::MediaDef;
+use crate::types::{format_mm_value, OFD_NAMESPACE, StBox};
+
+/// OFD spec version. ofdrw uses "1.2".
+const OFD_VERSION: &str = "1.2";
+
+/// UTF-8 BOM + XML declaration.
+const XML_HEADER: &str = "\u{FEFF}<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 
 /// Generate OFD.xml — the main entry file.
 pub(crate) fn gen_ofd_xml(doc_info: &DocInfo) -> String {
     let mut xml = String::with_capacity(512);
-    xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.push_str(XML_HEADER);
     xml.push_str(&format!(
-        "<ofd:OFD xmlns:ofd=\"{}\" Version=\"1.1\" DocType=\"OFD\">\n",
-        OFD_NAMESPACE
+        "<ofd:OFD xmlns:ofd=\"{}\" Version=\"{}\" DocType=\"OFD\">\n",
+        OFD_NAMESPACE, OFD_VERSION
     ));
     xml.push_str("  <ofd:DocBody>\n");
     xml.push_str("    <ofd:DocInfo>\n");
-    xml.push_str(&format!("      <ofd:DocID>{}</ofd:DocID>\n", doc_info.doc_id));
+    xml.push_str(&format!(
+        "      <ofd:DocID>{}</ofd:DocID>\n",
+        escape_xml(&doc_info.doc_id)
+    ));
     if let Some(ref title) = doc_info.title {
-        xml.push_str(&format!("      <ofd:Title>{}</ofd:Title>\n", escape_xml(title)));
+        xml.push_str(&format!(
+            "      <ofd:Title>{}</ofd:Title>\n",
+            escape_xml(title)
+        ));
     }
     if let Some(ref author) = doc_info.author {
-        xml.push_str(&format!("      <ofd:Author>{}</ofd:Author>\n", escape_xml(author)));
-    }
-    if let Some(ref creator) = doc_info.creator {
-        xml.push_str(&format!("      <ofd:Creator>{}</ofd:Creator>\n", escape_xml(creator)));
-    }
-    if let Some(ref version) = doc_info.creator_version {
-        xml.push_str(&format!("      <ofd:CreatorVersion>{}</ofd:CreatorVersion>\n", escape_xml(version)));
+        xml.push_str(&format!(
+            "      <ofd:Author>{}</ofd:Author>\n",
+            escape_xml(author)
+        ));
     }
     if let Some(ref date) = doc_info.creation_date {
-        xml.push_str(&format!("      <ofd:CreationDate>{}</ofd:CreationDate>\n", escape_xml(date)));
+        xml.push_str(&format!(
+            "      <ofd:CreationDate>{}</ofd:CreationDate>\n",
+            escape_xml(date)
+        ));
+    }
+    if let Some(ref creator) = doc_info.creator {
+        xml.push_str(&format!(
+            "      <ofd:Creator>{}</ofd:Creator>\n",
+            escape_xml(creator)
+        ));
+    }
+    if let Some(ref version) = doc_info.creator_version {
+        xml.push_str(&format!(
+            "      <ofd:CreatorVersion>{}</ofd:CreatorVersion>\n",
+            escape_xml(version)
+        ));
     }
     xml.push_str("    </ofd:DocInfo>\n");
     xml.push_str("    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>\n");
@@ -49,22 +73,28 @@ pub(crate) fn gen_document_xml(
     page_area: &StBox,
 ) -> String {
     let mut xml = String::with_capacity(1024);
-    xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.push_str(XML_HEADER);
     xml.push_str(&format!(
         "<ofd:Document xmlns:ofd=\"{}\">\n",
         OFD_NAMESPACE
     ));
 
-    // CommonData
+    // CommonData first (matches ofdrw order)
     xml.push_str("  <ofd:CommonData>\n");
-    xml.push_str(&format!("    <ofd:MaxUnitID>{}</ofd:MaxUnitID>\n", max_id));
+    xml.push_str(&format!(
+        "    <ofd:MaxUnitID>{}</ofd:MaxUnitID>\n",
+        max_id
+    ));
     xml.push_str("    <ofd:PageArea>\n");
     xml.push_str(&format!(
         "      <ofd:PhysicalBox>{}</ofd:PhysicalBox>\n",
         page_area
     ));
+    xml.push_str(&format!(
+        "      <ofd:ApplicationBox>{}</ofd:ApplicationBox>\n",
+        page_area
+    ));
     xml.push_str("    </ofd:PageArea>\n");
-    xml.push_str("    <ofd:PublicRes>PublicRes.xml</ofd:PublicRes>\n");
     xml.push_str("    <ofd:DocumentRes>DocumentRes.xml</ofd:DocumentRes>\n");
     xml.push_str("  </ofd:CommonData>\n");
 
@@ -85,7 +115,7 @@ pub(crate) fn gen_document_xml(
 /// Generate DocumentRes.xml — multimedia resource declarations.
 pub(crate) fn gen_document_res_xml(medias: &[MediaDef]) -> String {
     let mut xml = String::with_capacity(512);
-    xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.push_str(XML_HEADER);
     xml.push_str(&format!(
         "<ofd:Res xmlns:ofd=\"{}\" BaseLoc=\"Res\">\n",
         OFD_NAMESPACE
@@ -95,8 +125,9 @@ pub(crate) fn gen_document_res_xml(medias: &[MediaDef]) -> String {
         xml.push_str("  <ofd:MultiMedias>\n");
         for m in medias {
             xml.push_str(&format!(
-                "    <ofd:MultiMedia ID=\"{}\" Type=\"Image\">\n",
-                m.id
+                "    <ofd:MultiMedia ID=\"{}\" Type=\"Image\" Format=\"{}\">\n",
+                m.id,
+                m.format.ofd_format()
             ));
             xml.push_str(&format!(
                 "      <ofd:MediaFile>{}</ofd:MediaFile>\n",
@@ -111,34 +142,6 @@ pub(crate) fn gen_document_res_xml(medias: &[MediaDef]) -> String {
     xml
 }
 
-/// Generate PublicRes.xml — fonts and color spaces.
-pub(crate) fn gen_public_res_xml(fonts: &[FontDef]) -> String {
-    let mut xml = String::with_capacity(512);
-    xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-    xml.push_str(&format!(
-        "<ofd:Res xmlns:ofd=\"{}\" BaseLoc=\"Res\">\n",
-        OFD_NAMESPACE
-    ));
-
-    if !fonts.is_empty() {
-        xml.push_str("  <ofd:Fonts>\n");
-        for font in fonts {
-            xml.push_str(&format!(
-                "    <ofd:Font ID=\"{}\" FontName=\"{}\"",
-                font.id, escape_xml(&font.font_name)
-            ));
-            if let Some(family) = &font.family_name {
-                xml.push_str(&format!(" FamilyName=\"{}\"", escape_xml(family)));
-            }
-            xml.push_str("/>\n");
-        }
-        xml.push_str("  </ofd:Fonts>\n");
-    }
-
-    xml.push_str("</ofd:Res>\n");
-    xml
-}
-
 /// Generate Content.xml — page content with layers and graphic objects.
 pub(crate) fn gen_content_xml(
     layer_id: u32,
@@ -146,22 +149,27 @@ pub(crate) fn gen_content_xml(
     page_area: Option<&StBox>,
 ) -> String {
     let mut xml = String::with_capacity(1024);
-    xml.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    xml.push_str(XML_HEADER);
     xml.push_str(&format!(
         "<ofd:Page xmlns:ofd=\"{}\">\n",
         OFD_NAMESPACE
     ));
 
-    // Optional per-page area override
+    // Optional per-page area override (with both PhysicalBox and ApplicationBox)
     if let Some(area) = page_area {
         xml.push_str("  <ofd:Area>\n");
         xml.push_str(&format!(
             "    <ofd:PhysicalBox>{}</ofd:PhysicalBox>\n",
             area
         ));
+        xml.push_str(&format!(
+            "    <ofd:ApplicationBox>{}</ofd:ApplicationBox>\n",
+            area
+        ));
         xml.push_str("  </ofd:Area>\n");
     }
 
+    // Content without ID attribute (matches ofdrw)
     xml.push_str("  <ofd:Content>\n");
     xml.push_str(&format!(
         "    <ofd:Layer ID=\"{}\" Type=\"Body\">\n",
@@ -184,9 +192,17 @@ pub(crate) fn gen_content_xml(
 
 fn write_image_object(xml: &mut String, img: &ImageObject, indent: usize) {
     let pad: String = " ".repeat(indent);
+    let ctm_w = format_mm_value(img.boundary.w);
+    let ctm_h = format_mm_value(img.boundary.h);
     xml.push_str(&format!(
-        "{}<ofd:ImageObject ID=\"{}\" Boundary=\"{}\" ResourceID=\"{}\"",
-        pad, img.id, img.boundary, img.resource_id
+        "{pad}<ofd:ImageObject ID=\"{id}\" ResourceID=\"{res}\" \
+         Boundary=\"{boundary}\" CTM=\"{cw} 0 0 {ch} 0 0\"",
+        pad = pad,
+        id = img.id,
+        res = img.resource_id,
+        boundary = img.boundary,
+        cw = ctm_w,
+        ch = ctm_h,
     ));
     if let Some(alpha) = img.alpha {
         xml.push_str(&format!(" Alpha=\"{}\"", alpha));
